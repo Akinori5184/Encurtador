@@ -7,6 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Models for Encurtador
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -17,24 +19,32 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   links     Link[]
+
+  @@map("users")
 }
 
 model Link {
-  id         String   @id @default(uuid())
-  shortCode  String   @unique
-  customAlias String? @unique
-  longUrl    String
-  userId     String?  
-  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title      String?
-  metadata   Json     @default("{}")
-  expiresAt  DateTime?
-  isActive   Boolean  @default(true)
-  deletedAt  DateTime?
-  visitCount BigInt   @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  clicks     Click[]
+  id          String   @id @default(uuid())
+  shortCode   String   @unique @db.VarChar(32)
+  customAlias String?  @unique @db.VarChar(255)
+  longUrl     String   @db.Text
+  userId      String?  
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String?
+  metadata    Json     @default("{}")
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  deletedAt   DateTime?
+  visitCount  BigInt   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  clicks      Click[]
+
+  // Indexes to optimize hot-path lookups and queries
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([isActive])
+  @@map("links")
 }
 
 model Click {
@@ -53,4 +63,18 @@ model Click {
   browser    String?
   isBot      Boolean  @default(false)
   geo        Json?
+
+  @@index([linkId, occurredAt])
+  @@index([occurredAt])
+  @@map("clicks")
+}
+
+// Aggregated daily stats to speed up analytics queries
+model LinkStatsDaily {
+  linkId String
+  day    DateTime
+  clicks BigInt  @default(0)
+
+  @@id([linkId, day])
+  @@map("link_stats_daily")
 }
