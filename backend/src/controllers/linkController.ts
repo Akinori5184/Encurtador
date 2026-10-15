@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { createShortLink, findByShortCode } from '../services/shortenerService';
+import { createShortLink } from '../services/shortenerService';
 import cache from '../services/cacheService';
 import prisma from '../prismaClient';
 
@@ -12,7 +12,10 @@ export const createLink = async (req: Request, res: Response) => {
     return res.status(201).json(link);
   } catch (err:any) {
     console.error(err);
-    return res.status(500).json({ error: err.message || 'internal' });
+    // return user-friendly errors for known cases
+    const msg = err?.message || 'internal';
+    if (msg.includes('Invalid URL') || msg.includes('custom alias')) return res.status(400).json({ error: msg });
+    return res.status(500).json({ error: msg });
   }
 };
 
@@ -24,20 +27,20 @@ export const handleRedirect = async (req: Request, res: Response) => {
     // Try cache
     const cached = await cache.getShort(shortCode);
     if (cached) {
-      // increment counter in Redis
-      cache.incrCounter(cached.id);
+      // increment counter in Redis (fire-and-forget)
+      cache.incrCounter(cached.id).catch(console.error);
       return res.redirect(302, cached.longUrl);
     }
 
     // Cache miss -> DB
-    const link = await findByShortCode(shortCode);
+    const link = await prisma.link.findUnique({ where: { shortCode } });
     if (!link) return res.status(404).send('Not found');
     if (!link.isActive) return res.status(410).send('Link inactive');
     if (link.expiresAt && new Date() > link.expiresAt) return res.status(410).send('Link expired');
 
     // set cache
     await cache.setShort(shortCode, { id: link.id, longUrl: link.longUrl, isActive: link.isActive, expiresAt: link.expiresAt?.toISOString() });
-    cache.incrCounter(link.id);
+    cache.incrCounter(link.id).catch(console.error);
 
     return res.redirect(302, link.longUrl);
   } catch (err:any) {
