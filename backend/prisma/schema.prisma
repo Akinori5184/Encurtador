@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      String   @default("user")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  links     Link[]
+}
+
+model Link {
+  id         String   @id @default(uuid())
+  shortCode  String   @unique
+  customAlias String? @unique
+  longUrl    String
+  userId     String?  
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String?
+  metadata   Json     @default("{}")
+  expiresAt  DateTime?
+  isActive   Boolean  @default(true)
+  deletedAt  DateTime?
+  visitCount BigInt   @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  clicks     Click[]
+}
+
+model Click {
+  id         BigInt   @id @default(autoincrement())
+  linkId     String
+  link       Link     @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  occurredAt DateTime @default(now())
+  ip         String?
+  userAgent  String?
+  referrer   String?
+  country    String?
+  region     String?
+  city       String?
+  deviceType String?
+  os         String?
+  browser    String?
+  isBot      Boolean  @default(false)
+  geo        Json?
+}
